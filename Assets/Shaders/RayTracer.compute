@@ -1,0 +1,259 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct Ray
+{
+    float3 origin;
+    float3 direction;
+};
+
+struct HitRecord
+{
+    float3 pt;
+    float3 normal;
+    uint colorIndex;
+    float t;
+    bool frontFace;
+};
+
+struct Triangle
+{
+    uint v0;
+    uint v1;
+    uint v2;
+    uint colorIndex;
+};
+
+struct Bound
+{
+    float3 Min;
+    float3 Max;
+    uint startIndex;
+    uint triCount;
+};
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+StructuredBuffer<Triangle> Triangles;
+StructuredBuffer<float3> Colors;
+StructuredBuffer<float3> Vertices;
+StructuredBuffer<Bound> Bounds;
+
+uint NSamples;
+uint MaxDepth;
+float4x4 CameraToWorld;
+float4x4 CameraInverseProj;
+
+#define MAX_DEPTH 16
+
+uint Hash(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x85ebca6b;
+    x ^= x >> 13;
+    x *= 0xc2b2ae35;
+    x ^= x >> 16;
+    return x;
+}
+
+float Random(uint seed)
+{
+    uint hashed = Hash(seed);
+    return (float) (hashed & 0x00FFFFFFu) / 16777216.0f; // Normalize to [0, 1]
+}
+
+float2 Random2(uint seed)
+{
+    // Generate the first random number
+    float random1 = Random(seed);
+
+    // Modify the seed to generate the second random number
+    float random2 = Random(seed + 1);
+
+    return float2(random1, random2);
+}
+
+float3 RandomUnitVector(uint seed)
+{
+    float x = Random(seed) * 2.0f - 1.0f;
+    float y = Random(seed + 1) * 2.0f - 1.0f;
+    float z = Random(seed + 2) * 2.0f - 1.0f;
+
+    return normalize(float3(x, y, z));
+}
+
+Ray CreateRay(float3 origin, float3 direction)
+{
+    Ray ray;
+    ray.origin = origin;
+    ray.direction = direction;
+    return ray;
+}
+
+Ray CreateCameraRay(float2 uv)
+{
+    float3 origin = mul(CameraToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+    float3 direction = mul(CameraInverseProj, float4(uv, 0.0f, 1.0f)).xyz;
+    direction = mul(CameraToWorld, float4(direction, 0.0f)).xyz;
+    // direction = normalize(direction);
+    return CreateRay(origin, direction);
+}
+
+void SetFaceNormal(inout HitRecord rec, Ray r, float3 outwardNormal)
+{
+    rec.frontFace = dot(r.direction, outwardNormal) < 0;
+    rec.normal = rec.frontFace ? outwardNormal : -outwardNormal;
+}
+
+bool HitTriangle(Triangle tri, Ray r, float tMin, float tMax, out float t)
+{
+    // Default
+    t = tMax;
+    
+    float3 v0 = Vertices[tri.v0];
+    float3 v1 = Vertices[tri.v1];
+    float3 v2 = Vertices[tri.v2];
+    
+    // Edges
+    float3 e1 = v1 - v0;
+    float3 e2 = v2 - v0;
+    
+    // Checking if parallel
+    float3 p = cross(r.direction, e2);
+    float det = dot(e1, p);
+    if (det < 1e-8f)
+        return false;
+    
+    // Check if intersection is outside triangle
+    float invdet = 1.0f / det;
+    float3 T = r.origin - v0;
+    float u = dot(T, p) * invdet;
+    if (u < 0.0f || u > 1.0f)
+        return false;
+    
+    float3 q = cross(T, e1);
+    float v = dot(r.direction, q) * invdet;
+    if (v < 0.0f || u + v > 1.0f)
+        return false;
+    
+    t = dot(e2, q) * invdet;
+    if (t <= tMin || t >= tMax)
+        return false;
+    
+    return true;
+}
+
+bool HitBound(Bound b, Ray r, float near, float far, out float t)
+{
+    // Prenormalize rays??
+    float3 invDir = 1 / normalize(r.direction);
+    
+    float t1x = (b.Min.x - r.origin.x) * invDir.x;
+    float t2x = (b.Max.x - r.origin.x) * invDir.x;
+    float tMinX = min(t1x, t2x);
+    float tMaxX = max(t1x, t2x);
+    
+    float t1y = (b.Min.y - r.origin.y) * invDir.y;
+    float t2y = (b.Max.y - r.origin.y) * invDir.y;
+    float tMinY = min(t1y, t2y);
+    float tMaxY = max(t1y, t2y);
+    
+    float t1z = (b.Min.z - r.origin.z) * invDir.z;
+    float t2z = (b.Max.z - r.origin.z) * invDir.z;
+    float tMinZ = min(t1z, t2z);
+    float tMaxZ = max(t1z, t2z);
+    
+    float tMin = max(max(tMinX, tMinY), tMinZ);
+    float tMax = min(min(tMaxX, tMaxY), tMaxZ);
+    
+    t = tMin > near ? tMin : tMax;
+    return near < t && far > t && tMax >= tMin;
+}
+
+float3 RayColor(Ray ray, uint seed)
+{
+    float nearLimit = 0.001f;
+    float farLimit = 100000.0f;
+    
+    uint nTris, nBounds, _;
+    Triangles.GetDimensions(nTris, _);
+    Bounds.GetDimensions(nBounds, _);
+        
+    float3 attenuation = float3(1.0f, 1.0f, 1.0f);
+    HitRecord rec;
+    
+    for (uint depth = 0; depth <= MaxDepth; depth++)
+    {
+        int closestHit = -1;
+        float closestT = farLimit, t;
+        int stack[MAX_DEPTH];
+        stack[0] = 1;
+        int top = 0;
+    
+        while (top != -1)
+        {
+            uint bIndex = stack[top--];
+            Bound b = Bounds[bIndex];
+        
+            if (!HitBound(b, ray, nearLimit, farLimit, t))
+                continue;
+        
+            if (bIndex >= nBounds / 2)
+            {
+                for (uint triIndex = b.startIndex; triIndex < b.startIndex + b.triCount; triIndex++)
+                {
+                    if (HitTriangle(Triangles[triIndex], ray, nearLimit, farLimit, t))
+                    {
+                        if (t < closestT)
+                        {
+                            closestT = t;
+                            closestHit = triIndex;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                stack[++top] = 2 * bIndex;
+                stack[++top] = 2 * bIndex + 1;
+            }
+        }
+        
+        if (closestHit == -1)
+            return attenuation * lerp(float3(0.0f, 0.0f, 0.0f), float3(0.5f, 0.7f, 1.0f), 0.5f * (normalize(ray.direction).y + 1.0f));
+
+        rec.t = closestT;
+        rec.pt = ray.origin + closestT * ray.direction;
+        Triangle tri = Triangles[closestHit];
+        rec.colorIndex = tri.colorIndex;
+        SetFaceNormal(rec, ray, normalize(cross(Vertices[tri.v1] - Vertices[tri.v0], Vertices[tri.v2] - Vertices[tri.v0])));
+        
+        seed = Hash(seed);
+        ray.origin = rec.pt;
+        ray.direction = rec.normal + RandomUnitVector(seed);
+        attenuation *= Colors[rec.colorIndex];
+    }
+    
+    return float3(0.0f, 0.0f, 0.0f);
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    uint sWidth, sHeight;
+    Result.GetDimensions(sWidth, sHeight);
+    
+    float3 rayColor = float3(0.0f, 0.0f, 0.0f);
+    
+    for (uint i = 0; i < NSamples; i++)
+    {
+        uint seed = id.x + id.y * sWidth + i * 2003;
+        float2 uv = (id.xy + Random2(seed)) / float2(sWidth, sHeight) * 2.0f - 1.0f;
+        Ray ray = CreateCameraRay(uv);
+        rayColor += RayColor(ray, seed);
+    }
+    
+    Result[id.xy] = float4(rayColor / NSamples, 1.0f);
+}

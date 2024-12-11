@@ -1,0 +1,165 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct Ray
+{
+    float3 origin;
+    float3 direction;
+    float3 invdir;
+};
+
+struct Triangle
+{
+    uint v0;
+    uint v1;
+    uint v2;
+};
+
+struct Bound
+{
+    float3 Min;
+    float3 Max;
+    uint startIndex;
+    uint triCount;
+};
+
+// Define the size of the thread groups
+#define THREADS_PER_GROUP 256
+#define MAX_DEPTH 16
+#define NEAR_LIMIT 0.01f
+#define FAR_LIMIT 100000.0f
+
+// Input and output buffers
+StructuredBuffer<float3> InputPoints; // Input positions
+RWStructuredBuffer<uint> IsBlocked; // Output positions
+uint _NumPoints;
+
+StructuredBuffer<Triangle> Triangles;
+StructuredBuffer<float3> Vertices;
+StructuredBuffer<Bound> Bounds;
+uint _NumBounds;
+
+float4 SunUnitDirection; // Assumed to be prenormalized
+
+Ray CreateRay(float3 origin, float3 direction)
+{
+    Ray ray;
+    ray.origin = origin;
+    ray.direction = direction;
+    ray.invdir = 1 / direction;
+    return ray;
+}
+
+bool HitTriangle(Triangle tri, Ray r, float tMin, float tMax, out float t)
+{
+    // Default
+    t = tMax;
+    
+    float3 v0 = Vertices[tri.v0];
+    float3 v1 = Vertices[tri.v1];
+    float3 v2 = Vertices[tri.v2];
+        
+    // Edges
+    float3 e1 = v1 - v0;
+    float3 e2 = v2 - v0;
+    
+    // Checking if parallel
+    float3 p = cross(r.direction, e2);
+    float det = dot(e1, p);
+    
+    if (abs(det) < 1e-8f)
+        return false;
+    
+    // Check if intersection is outside triangle
+    float invdet = 1.0f / det;
+    float3 T = r.origin - v0;
+    float u = dot(T, p) * invdet;
+    
+    if (u < 0.0f || u > 1.0f)
+        return false;
+    
+    float3 q = cross(T, e1);
+    float v = dot(r.direction, q) * invdet;
+    
+    if (v < 0.0f || u + v > 1.0f)
+        return false;
+    
+    t = dot(e2, q) * invdet;
+    if (t <= tMin || t >= tMax)
+        return false;
+    
+    return true;
+}
+
+bool HitBound(Bound b, Ray r, float near, float far, out float t)
+{   
+    float t1x = (b.Min.x - r.origin.x) * r.invdir.x;
+    float t2x = (b.Max.x - r.origin.x) * r.invdir.x;
+    float tMinX = min(t1x, t2x);
+    float tMaxX = max(t1x, t2x);
+    
+    float t1y = (b.Min.y - r.origin.y) * r.invdir.y;
+    float t2y = (b.Max.y - r.origin.y) * r.invdir.y;
+    float tMinY = min(t1y, t2y);
+    float tMaxY = max(t1y, t2y);
+    
+    float t1z = (b.Min.z - r.origin.z) * r.invdir.z;
+    float t2z = (b.Max.z - r.origin.z) * r.invdir.z;
+    float tMinZ = min(t1z, t2z);
+    float tMaxZ = max(t1z, t2z);
+    
+    float tMin = max(max(tMinX, tMinY), tMinZ);
+    float tMax = min(min(tMaxX, tMaxY), tMaxZ);
+    
+    t = tMin > near ? tMin : tMax;
+    return near < t && far > t && tMax >= tMin;
+}
+
+bool CheckIsBlocked(float3 testPoint)
+{   
+    Ray ray = CreateRay(testPoint, -SunUnitDirection.xyz);
+    
+    float t;
+    int stack[MAX_DEPTH];
+    stack[0] = 1;
+    int top = 0;
+    
+    while (top != -1)
+    {
+        uint bIndex = stack[top--];
+        Bound b = Bounds[bIndex];
+        
+        if (!HitBound(b, ray, NEAR_LIMIT, FAR_LIMIT, t))
+            continue;
+        
+        if (bIndex >= _NumBounds / 2)
+        {
+            for (uint triIndex = b.startIndex; triIndex < b.startIndex + b.triCount; triIndex++)
+            {
+                if (HitTriangle(Triangles[triIndex], ray, NEAR_LIMIT, FAR_LIMIT, t))
+                    return true;
+            } 
+        }
+        else
+        {
+            stack[++top] = 2 * bIndex;
+            stack[++top] = 2 * bIndex + 1;
+        }
+    }
+    
+    return false;
+}
+
+[numthreads(THREADS_PER_GROUP, 1, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+
+    // Check if index is within bounds
+    if (index < _NumPoints)
+    {
+        // Process the point (add the offset)
+        IsBlocked[index] = CheckIsBlocked(InputPoints[index]) ? 1 : 0;
+        // IsBlocked[index] = CheckIsBlocked(InputPoints[index]);
+    }
+}
