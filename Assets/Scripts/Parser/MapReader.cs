@@ -14,7 +14,9 @@ public class MapReader : MonoBehaviour
 {
     //[Tooltip("Path to shapefile (.shp)")]
     public string shpPath;
-    public Material buildingMat;
+    
+    public Material topFaceMat;
+    public Material vertFaceMat;
 
     double centreX = 246006.164014719;
     double centreY = 2549078.7998468;
@@ -36,7 +38,7 @@ public class MapReader : MonoBehaviour
                     // Debug.Log("Triangulating...");
                     try
                     {
-                        CreateMeshFromPolygon(new Polygon((LinearRing) polygon.ExteriorRing), height, id);
+                        CreateMeshesFromPolygon(new Polygon((LinearRing) polygon.ExteriorRing), height, id);
                     }
                     catch (Exception)
                     {
@@ -49,59 +51,61 @@ public class MapReader : MonoBehaviour
         }
     }
 
-    void CreateMeshFromPolygon(Polygon polygon, float height, int id)
+    void CreateMeshesFromPolygon(Polygon polygon, float height, int id)
     {
-        Mesh mesh = new Mesh();
+        MeshFilter mf;
+        MeshRenderer mr;
         List<Vector3> vertices = new List<Vector3>();
 
         for (int i = polygon.Coordinates.Length - 2; i >= 0; i--)
         {
             vertices.Add(new Vector3((float)(polygon.Coordinates[i].X - centreX), height, (float)(polygon.Coordinates[i].Y - centreY)));
         }
-        int nTopVertices = vertices.Count;
-        mesh.subMeshCount = nTopVertices + 1;
 
+        int nTopVertices = vertices.Count;
         List<int> topFaceTris = EarClippingTriangulation.Triangulate(vertices);
+
+        GameObject building = new GameObject(id.ToString());
+        building.transform.parent = transform;
+
+        // Top mesh
+        Mesh topMesh = new Mesh();
+        topMesh.vertices = vertices.ToArray();
+        topMesh.triangles = topFaceTris.ToArray();
+        
+        GameObject topFace = new GameObject("0");
+        topFace.transform.parent = building.transform;
+        mf = topFace.AddComponent<MeshFilter>();
+        mr = topFace.AddComponent<MeshRenderer>();
+        mf.sharedMesh = topMesh;
+        mr.sharedMaterial = new(topFaceMat);
 
         // Adding bottom vertices
 
         for (int i = 0; i < nTopVertices; i++)
         {
-            Vector3 bottomVert = vertices[i] + Vector3.down * vertices[i].y;
-            vertices.Add(bottomVert);
+            Mesh vertFaceMesh = new Mesh();
+            vertFaceMesh.vertices = new Vector3[]
+            {
+                vertices[i],
+                vertices[(i + 1) % nTopVertices],
+                vertices[i] + Vector3.down * vertices[i].y,
+                vertices[(i + 1) % nTopVertices] + Vector3.down * vertices[(i + 1) % nTopVertices].y
+            };
+
+            vertFaceMesh.triangles = new int[] { 0, 1, 2, 1, 3, 2 };
+            vertFaceMesh.uv = new Vector2[]
+            {
+                new(0, 0), new(0, 1), new(1, 0), new(1, 1)
+            };
+
+            GameObject vertFace = new GameObject((i + 1).ToString());
+            vertFace.transform.parent = building.transform;
+            mf = vertFace.AddComponent<MeshFilter>();
+            mr = vertFace.AddComponent<MeshRenderer>();
+            mf.sharedMesh = vertFaceMesh;
+            mr.sharedMaterial = new(vertFaceMat);
         }
-        mesh.SetVertices(vertices);
-
-        mesh.SetTriangles(topFaceTris, 0);
-        for (int i = 0; i < nTopVertices; i++)
-        {
-            int[] verticalFaceTris = new int[6];
-            verticalFaceTris[0] = i;
-            verticalFaceTris[1] = (i + 1) % nTopVertices;
-            verticalFaceTris[2] = nTopVertices + i;
-
-            verticalFaceTris[3] = (i + 1) % nTopVertices;
-            verticalFaceTris[4] = nTopVertices + (i + 1) % nTopVertices;
-            verticalFaceTris[5] = nTopVertices + i;
-            mesh.SetTriangles(verticalFaceTris, i + 1);
-        }
-
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-
-        GameObject building = new GameObject(id.ToString());
-        building.transform.parent = transform;
-        MeshFilter mf = building.AddComponent<MeshFilter>();
-        MeshRenderer mr = building.AddComponent<MeshRenderer>();
-
-        Material[] materials = new Material[mesh.subMeshCount];
-        for (int i = 0;i < mesh.subMeshCount; i++)
-        {
-            materials[i] = new Material(buildingMat);
-        }
-
-        mr.sharedMaterials = materials;
-        mf.sharedMesh = mesh;
     }
 
     private static bool IsCounterClockwise(Vector3 a, Vector3 b, Vector3 c)

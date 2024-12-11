@@ -5,13 +5,17 @@ using UnityEngine;
 
 public class EquidistantPoints : MonoBehaviour
 {
-    public MeshFilter meshFilter;
-    
-    [Tooltip("Points per square area")]
-    [Range(1, 3)]
-    public int resolutionFactor;
+    //public MeshFilter meshFilter;
 
-    public static List<Vector3> SamplePoints(Vector3[] verts, int[] tris, int resolutionFactor, out float faceArea)
+    //[Tooltip("Points per square area")]
+    //[Range(1, 3)]
+    //public int resolutionFactor;
+
+    public Vector2 end1;
+    public Vector2 end2;
+    public float height;
+
+    public static List<Vector3> SamplePointsBarycentric(Vector3[] verts, int[] tris, out float faceArea)
     {
         List<Vector3> points = new List<Vector3>();
         faceArea = 0;
@@ -22,7 +26,7 @@ public class EquidistantPoints : MonoBehaviour
             Vector3 vert3 = verts[tris[k + 2]];
             float area = CalculateTriangleArea(vert1, vert2, vert3);
             faceArea += area;
-            int numPoints = Mathf.CeilToInt(Mathf.Sqrt(area) * resolutionFactor);
+            int numPoints = Mathf.CeilToInt(Mathf.Sqrt(area));
 
             float epsilon = 1 - 1.0f / numPoints;
 
@@ -44,7 +48,56 @@ public class EquidistantPoints : MonoBehaviour
         return points;
     }
 
-    public void CreateRefinedMesh()
+    public void GenerateSquare()
+    {
+        Mesh mesh = new Mesh();
+        mesh.vertices = new Vector3[]
+        {
+            new Vector3(end1.x, height, end1.y),
+            new Vector3(end2.x, height, end2.y),
+            new Vector3(end1.x, 0, end1.y),
+            new Vector3(end2.x, 0, end2.y)
+        };
+        mesh.triangles = new int[] { 0, 1, 2, 1, 3, 2 };
+        mesh.uv = new Vector2[]
+        {
+            new(0, 0), new(0, 1), new(1, 0), new(1, 1)
+        };
+
+        MeshFilter filter = GetComponent<MeshFilter>();
+        filter.sharedMesh = mesh;
+    }
+
+    public static List<Vector3> SampleRectanglePoints(Vector3[] verts, out float faceArea, out int pointsWidth)
+    {
+        List<Vector3> points = new List<Vector3>();
+        
+        Vector3 firstVert = verts[0];
+        Vector3 horDir = verts[1] - firstVert;
+        Vector3 verDir = verts[2] - firstVert;
+
+        faceArea = horDir.magnitude * verDir.magnitude;
+
+        int width = Mathf.CeilToInt(horDir.magnitude);
+        int height = Mathf.CeilToInt(verDir.magnitude);
+
+        firstVert += (horDir - (width - 1) * horDir.normalized + verDir - (height - 1) * verDir.normalized) / 2.0f;
+        horDir = horDir.normalized;
+        verDir = verDir.normalized;
+
+        for (int i = 0; i < width; i++)
+        {
+            for (int j = 0; j < height; j++)
+            {
+                points.Add(firstVert + horDir * i + verDir * j);
+            }
+        }
+
+        pointsWidth = width;
+        return points;
+    }
+
+    public void CreateRefinedMesh(MeshFilter meshFilter, int resolutionFactor)
     {
         Mesh original = meshFilter.sharedMesh;
         GetComponent<MeshFilter>().sharedMesh = RefineMeshUsingBarycentric(original, resolutionFactor);

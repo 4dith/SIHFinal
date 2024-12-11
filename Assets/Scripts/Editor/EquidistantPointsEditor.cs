@@ -10,11 +10,7 @@ public class EquidistantPointsEditor : Editor
     {
         base.OnInspectorGUI();
         EquidistantPoints generator = (EquidistantPoints)target;
-        //generator.SamplePoints();
 
-        //if (GUILayout.Button("Create Refined Mesh"))
-        //{
-            
-        //}
+        generator.GenerateSquare();
     }
 }

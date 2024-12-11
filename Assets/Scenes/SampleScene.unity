@@ -153,7 +153,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   shpPath: Assets/Resources/FixedShapefile/Ahmedabad.shp
-  buildingMat: {fileID: 2100000, guid: 5cdb72d8667b9c6478a9d0e56cac4388, type: 2}
+  topFaceMat: {fileID: 2100000, guid: 5cdb72d8667b9c6478a9d0e56cac4388, type: 2}
+  vertFaceMat: {fileID: 2100000, guid: 4e97ce0dbc6e6c941a5f3dbdba4202db, type: 2}
 --- !u!4 &425829553
 Transform:
   m_ObjectHideFlags: 0
@@ -311,7 +312,6 @@ MonoBehaviour:
   hourOfYear: 3705
   directionalLight: {fileID: 705507994}
   epwFilePath: Assets/Resources/IND_Ahmedabad.426470_IWEC/IND_Ahmedabad.426470_IWEC.epw
-  resolutionFactor: 1
   depth: 16
   computeShader: {fileID: 7200000, guid: 85a0ce6c905e36144a8556b5333d037f, type: 3}
   boxColor: {r: 0.5320754, g: 0.5320754, b: 0.5320754, a: 0.38039216}

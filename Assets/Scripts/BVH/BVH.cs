@@ -98,23 +98,28 @@ public class BVH
 
         for (int i = 0; i < meshObj.childCount; i++)
         {
-            Transform child = meshObj.GetChild(i);
+            Transform building = meshObj.GetChild(i);
 
-            MeshFilter meshFilter = child.GetComponent<MeshFilter>();
-            int[] tris = meshFilter.sharedMesh.triangles;
-            Vector3[] verts = meshFilter.sharedMesh.vertices;
-
-            for (int j = 0; j < verts.Length; j++)
+            for (int j = 0; j < building.childCount; j++)
             {
-                vertList.Add(child.TransformPoint(verts[j]));
-            }
+                Transform buildingFace = building.GetChild(j);
+                
+                MeshFilter meshFilter = buildingFace.GetComponent<MeshFilter>();
+                int[] tris = meshFilter.sharedMesh.triangles;
+                Vector3[] verts = meshFilter.sharedMesh.vertices;
 
-            for (int j = 0; j < tris.Length; j++)
-            {
-                triList.Add(vertIndex + tris[j]);
-            }
+                for (int k = 0; k < verts.Length; k++)
+                {
+                    vertList.Add(buildingFace.TransformPoint(verts[k]));
+                }
 
-            vertIndex += verts.Length;
+                for (int k = 0; k < tris.Length; k++)
+                {
+                    triList.Add(vertIndex + tris[k]);
+                }
+
+                vertIndex += verts.Length;
+            }
         }
 
         BVH bvh = new BVH();

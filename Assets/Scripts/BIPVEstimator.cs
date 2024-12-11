@@ -17,6 +17,7 @@ struct TestPointMeta
     public List<int> facePointCounts;
     public List<float> faceAreas;
     public List<bool> isFaceVerticalList;
+    public List<int> vertFacePointWidths;
 }
 
 public class BIPVEstimator : MonoBehaviour
@@ -29,8 +30,6 @@ public class BIPVEstimator : MonoBehaviour
     public Light directionalLight;
     public string epwFilePath;
     public EPWData[] ePWData;
-    [Range(1, 3)]
-    public int resolutionFactor;
 
     float lat = 23.0225f * Mathf.Deg2Rad, lon = 72.5714f * Mathf.Deg2Rad;
 
@@ -67,14 +66,29 @@ public class BIPVEstimator : MonoBehaviour
         for (int i = 0; i < nBuildings; i++)
         {
             Transform building = meshObj.GetChild(i);
-            Mesh buildingMesh = building.GetComponent<MeshFilter>().sharedMesh;
+
             List<int> facePointCounts = new();
             List<bool> isFaceVerticalList = new();
             List<float> faceAreaList = new();
-            for (int j = 0; j < buildingMesh.subMeshCount; j++)
+            List<int> vertFacePointWidths = new();
+
+
+            for (int j = 0; j < building.childCount; j++)
             {
-                int[] faceTris = buildingMesh.GetTriangles(j);
-                List<Vector3> samplePoints = EquidistantPoints.SamplePoints(buildingMesh.vertices, faceTris, resolutionFactor, out float faceArea);
+                Transform buildingFace = building.GetChild(j);
+                Mesh faceMesh = buildingFace.GetComponent<MeshFilter>().sharedMesh;
+                List<Vector3> samplePoints;
+                float faceArea;
+                int pointsWidth;
+
+                if (j == 0)
+                    samplePoints = EquidistantPoints.SamplePointsBarycentric(faceMesh.vertices, faceMesh.triangles, out faceArea);
+                
+                else
+                {
+                    samplePoints = EquidistantPoints.SampleRectanglePoints(faceMesh.vertices, out faceArea, out pointsWidth);
+                    vertFacePointWidths.Add(pointsWidth);
+                } 
                 facePointCounts.Add(samplePoints.Count);
                 isFaceVerticalList.Add(j != 0);
                 faceAreaList.Add(faceArea);
@@ -87,7 +101,8 @@ public class BIPVEstimator : MonoBehaviour
                 buildingPointLimit = currentPointIndex,
                 facePointCounts = facePointCounts,
                 isFaceVerticalList = isFaceVerticalList,
-                faceAreas = faceAreaList
+                faceAreas = faceAreaList,
+                vertFacePointWidths = vertFacePointWidths
             };
             testPointData.Add(buildingPointData);
         }
@@ -172,9 +187,9 @@ public class BIPVEstimator : MonoBehaviour
             List<int> facePointCounts = buildingPointData.facePointCounts;
             List<float> faceAreas = buildingPointData.faceAreas;
             List<bool> isFaceVerticalList = buildingPointData.isFaceVerticalList;
+            List<int> vertFacePointWidths = buildingPointData.vertFacePointWidths;
 
-            MeshRenderer buildingRenderer = meshObj.GetChild(buildingId).GetComponent<MeshRenderer>();
-            Material[] buildingMats = buildingRenderer.sharedMaterials;
+            Transform buildingChild = meshObj.GetChild(buildingId);
 
             int currentStartIndex = startIndex;
 
@@ -187,7 +202,6 @@ public class BIPVEstimator : MonoBehaviour
                 {
                     numObstructions += testResults[pointIndex];
                 }
-                currentStartIndex += numPointsInFace;
 
                 float shadowFraction = (float) numObstructions / numPointsInFace;
 
@@ -199,10 +213,36 @@ public class BIPVEstimator : MonoBehaviour
                 float eReflected = hourlyData.globHI * 0.2f * (1 - tiltFactor) / 2.0f;
                 float faceIrradiance = eDirect + eDiffuse + eReflected;
 
-                Color faceColor = Color.Lerp(freeColor, blockColor, Mathf.Max((faceIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
+                if (faceIndex == 0)
+                {
+                    Color faceColor = Color.Lerp(freeColor, blockColor, Mathf.Max((faceIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
+                    buildingChild.GetChild(faceIndex).GetComponent<MeshRenderer>().sharedMaterial.SetColor("_Color", faceColor);
+                }
+                else
+                {
+                    int width = vertFacePointWidths[faceIndex - 1];
+                    if (width == 0) break;
+                    int height = numPointsInFace / width;
+                    
+                    Texture2D faceTexture = new Texture2D(width, height);
 
+                    int pIndex = currentStartIndex;
+                    for (int i = 0; i < width; i++)
+                    {
+                        for (int j = 0; j < height; j++)
+                        {
+                            float pointIrradiance = (1 - testResults[pIndex]) * hourlyData.dirNI + eDiffuse + eReflected;
+                            Color pixelColor = Color.Lerp(freeColor, blockColor, Mathf.Max((pointIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
+                            faceTexture.SetPixel(i, j, pixelColor);
+                            pIndex++;
+                        }
+                    }
+                    faceTexture.Apply();
 
-                buildingMats[faceIndex].SetColor("_Color", faceColor);
+                    buildingChild.GetChild(faceIndex).GetComponent<MeshRenderer>().sharedMaterial.SetTexture("_MainTex", faceTexture);
+                }
+
+                currentStartIndex += numPointsInFace;
             }
         }
 
@@ -211,7 +251,7 @@ public class BIPVEstimator : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        //if (bvh == null) return;
+        if (bvh == null) return;
 
         //bvh.DrawBVH(boxColor);
 
