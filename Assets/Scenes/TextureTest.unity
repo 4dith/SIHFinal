@@ -318,9 +318,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 890099227}
-  - component: {fileID: 890099226}
   - component: {fileID: 890099229}
   - component: {fileID: 890099228}
+  - component: {fileID: 890099230}
   m_Layer: 0
   m_Name: TestObj
   m_TagString: Untagged
@@ -328,21 +328,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &890099226
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 890099225}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 622625175598f994d8c49a9b4edf0362, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  end1: {x: 4.43, y: 0}
-  end2: {x: 0, y: 0}
-  height: 3.67
 --- !u!4 &890099227
 Transform:
   m_ObjectHideFlags: 0
@@ -407,8 +392,23 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 890099225}
-  m_Mesh: {fileID: 1279538563}
---- !u!43 &1279538563
+  m_Mesh: {fileID: 1273458261}
+--- !u!114 &890099230
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 890099225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 622625175598f994d8c49a9b4edf0362, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  end1: {x: 4.34, y: 0}
+  end2: {x: 0, y: 0}
+  height: 6.12
+--- !u!43 &1273458261
 Mesh:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -425,8 +425,8 @@ Mesh:
     firstVertex: 0
     vertexCount: 4
     localAABB:
-      m_Center: {x: 2.215, y: 1.835, z: 0}
-      m_Extent: {x: 2.215, y: 1.835, z: 0}
+      m_Center: {x: 2.17, y: 3.06, z: 0}
+      m_Extent: {x: 2.17, y: 3.06, z: 0}
   m_Shapes:
     vertices: []
     shapes: []
@@ -505,7 +505,7 @@ Mesh:
       format: 0
       dimension: 0
     m_DataSize: 80
-    _typelessdata: 8fc28d4048e16a400000000000000000000000000000000048e16a4000000000000000000000803f8fc28d4000000000000000000000803f000000000000000000000000000000000000803f0000803f
+    _typelessdata: 48e18a400ad7c340000000000000000000000000000000000ad7c34000000000000000000000803f48e18a4000000000000000000000803f000000000000000000000000000000000000803f0000803f
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -559,8 +559,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: 2.215, y: 1.835, z: 0}
-    m_Extent: {x: 2.215, y: 1.835, z: 0}
+    m_Center: {x: 2.17, y: 3.06, z: 0}
+    m_Extent: {x: 2.17, y: 3.06, z: 0}
   m_MeshUsageFlags: 0
   m_CookingOptions: 30
   m_BakedConvexCollisionMesh: 

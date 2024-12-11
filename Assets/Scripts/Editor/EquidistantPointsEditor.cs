@@ -11,6 +11,6 @@ public class EquidistantPointsEditor : Editor
         base.OnInspectorGUI();
         EquidistantPoints generator = (EquidistantPoints)target;
 
-        generator.GenerateSquare();
+        generator.GenerateRectangle();
     }
 }

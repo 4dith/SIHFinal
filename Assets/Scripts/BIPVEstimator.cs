@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public struct ColorlessTri
@@ -18,6 +17,7 @@ struct TestPointMeta
     public List<float> faceAreas;
     public List<bool> isFaceVerticalList;
     public List<int> vertFacePointWidths;
+    public List<Vector3> vertFaceNormalList;
 }
 
 public class BIPVEstimator : MonoBehaviour
@@ -71,6 +71,7 @@ public class BIPVEstimator : MonoBehaviour
             List<bool> isFaceVerticalList = new();
             List<float> faceAreaList = new();
             List<int> vertFacePointWidths = new();
+            List<Vector3> vertFaceNormalList = new();
 
 
             for (int j = 0; j < building.childCount; j++)
@@ -86,8 +87,9 @@ public class BIPVEstimator : MonoBehaviour
                 
                 else
                 {
-                    samplePoints = EquidistantPoints.SampleRectanglePoints(faceMesh.vertices, out faceArea, out pointsWidth);
+                    samplePoints = EquidistantPoints.SampleRectanglePoints(faceMesh.vertices, out faceArea, out pointsWidth, out Vector3 outwardNormal);
                     vertFacePointWidths.Add(pointsWidth);
+                    vertFaceNormalList.Add(outwardNormal);
                 } 
                 facePointCounts.Add(samplePoints.Count);
                 isFaceVerticalList.Add(j != 0);
@@ -102,7 +104,8 @@ public class BIPVEstimator : MonoBehaviour
                 facePointCounts = facePointCounts,
                 isFaceVerticalList = isFaceVerticalList,
                 faceAreas = faceAreaList,
-                vertFacePointWidths = vertFacePointWidths
+                vertFacePointWidths = vertFacePointWidths,
+                vertFaceNormalList = vertFaceNormalList,
             };
             testPointData.Add(buildingPointData);
         }
@@ -188,6 +191,7 @@ public class BIPVEstimator : MonoBehaviour
             List<float> faceAreas = buildingPointData.faceAreas;
             List<bool> isFaceVerticalList = buildingPointData.isFaceVerticalList;
             List<int> vertFacePointWidths = buildingPointData.vertFacePointWidths;
+            List<Vector3> vertFaceNormalList = buildingPointData.vertFaceNormalList;
 
             Transform buildingChild = meshObj.GetChild(buildingId);
 
@@ -208,20 +212,24 @@ public class BIPVEstimator : MonoBehaviour
                 EPWData hourlyData = ePWData[hourOfYear];
                 int tiltFactor = isFaceVerticalList[faceIndex] ? 0 : 1;
 
-                float eDirect = hourlyData.dirNI * shadowFraction;
+                Vector3 outwardNormal = (faceIndex == 0) ? Vector3.up : vertFaceNormalList[faceIndex - 1];
+                float cosTheta = Mathf.Max(0f, Vector3.Dot(outwardNormal, -directionalLight.transform.forward));
+
+                float eDirect = hourlyData.dirNI * (1.0f - shadowFraction) * cosTheta;
                 float eDiffuse = hourlyData.difHI * (1 + tiltFactor) / 2.0f;
                 float eReflected = hourlyData.globHI * 0.2f * (1 - tiltFactor) / 2.0f;
                 float faceIrradiance = eDirect + eDiffuse + eReflected;
 
                 if (faceIndex == 0)
                 {
-                    Color faceColor = Color.Lerp(freeColor, blockColor, Mathf.Max((faceIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
+                    Color faceColor = Color.Lerp(blockColor, freeColor, Mathf.Max((faceIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
                     buildingChild.GetChild(faceIndex).GetComponent<MeshRenderer>().sharedMaterial.SetColor("_Color", faceColor);
                 }
                 else
                 {
                     int width = vertFacePointWidths[faceIndex - 1];
                     if (width == 0) break;
+                    
                     int height = numPointsInFace / width;
                     
                     Texture2D faceTexture = new Texture2D(width, height);
@@ -231,8 +239,8 @@ public class BIPVEstimator : MonoBehaviour
                     {
                         for (int j = 0; j < height; j++)
                         {
-                            float pointIrradiance = (1 - testResults[pIndex]) * hourlyData.dirNI + eDiffuse + eReflected;
-                            Color pixelColor = Color.Lerp(freeColor, blockColor, Mathf.Max((pointIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
+                            float pointIrradiance = (1 - testResults[pIndex]) * hourlyData.dirNI * cosTheta + eDiffuse + eReflected;
+                            Color pixelColor = Color.Lerp(blockColor, freeColor, Mathf.Max((pointIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
                             faceTexture.SetPixel(i, j, pixelColor);
                             pIndex++;
                         }

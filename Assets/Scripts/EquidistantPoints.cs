@@ -48,7 +48,7 @@ public class EquidistantPoints : MonoBehaviour
         return points;
     }
 
-    public void GenerateSquare()
+    public void GenerateRectangle()
     {
         Mesh mesh = new Mesh();
         mesh.vertices = new Vector3[]
@@ -68,13 +68,15 @@ public class EquidistantPoints : MonoBehaviour
         filter.sharedMesh = mesh;
     }
 
-    public static List<Vector3> SampleRectanglePoints(Vector3[] verts, out float faceArea, out int pointsWidth)
+    public static List<Vector3> SampleRectanglePoints(Vector3[] verts, out float faceArea, out int pointsWidth, out Vector3 outwardNormal)
     {
         List<Vector3> points = new List<Vector3>();
         
         Vector3 firstVert = verts[0];
         Vector3 horDir = verts[1] - firstVert;
         Vector3 verDir = verts[2] - firstVert;
+
+        outwardNormal = Vector3.Cross(horDir, verDir).normalized;
 
         faceArea = horDir.magnitude * verDir.magnitude;
 
