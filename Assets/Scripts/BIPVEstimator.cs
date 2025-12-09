@@ -260,8 +260,8 @@ public class BIPVEstimator : MonoBehaviour
     private void OnDrawGizmos()
     {
         if (bvh == null) return;
-
-        //bvh.DrawBVH(boxColor);
+        // Debug.Log("Hello");
+        bvh.DrawBVH(boxColor);
 
         //for (int i = 0; i < testPoints.Count; i++)
         //{
