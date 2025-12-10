@@ -11,21 +11,13 @@ public class BIPVEstimatorEditor : Editor
         base.OnInspectorGUI();
         BIPVEstimator estimator = (BIPVEstimator)target;
 
-        if (GUILayout.Button("Load Weather Data"))
+        estimator.SetSunPosition(estimator.dayOfYear * 24 + 12);
+
+        if (GUILayout.Button("Compute Obstructions and Potentials"))
         {
             estimator.ePWData = EPWReader.ReadEPW(estimator.epwFilePath);
-        }
-
-        if (GUILayout.Button("Compute Obstructions"))
-        {
             estimator.ComputeObstructions();
-        }
-
-        if (GUILayout.Button("Calculate BIPV Potentials"))
-        {
             estimator.CalculatePerFaceBIPV();
         }
-
-        estimator.SetSunPosition();
     }
 }

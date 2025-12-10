@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using NetTopologySuite.IO.Esri.Shp.Readers;
 using UnityEngine;
 
 public struct ColorlessTri
@@ -22,12 +24,16 @@ struct TestPointMeta
 
 public class BIPVEstimator : MonoBehaviour
 {
-    public Transform meshObj;
+    public Transform mapReader;
 
     [Header("Light and Energy")]
-    [Range(0, 8759)]
-    public int hourOfYear;
+    [Range(0, 364)]
+    public int dayOfYear;
+    int startHour = 6;
+    int numHours = 12;
+
     public Light directionalLight;
+    Vector3[] sunDirections;
     public string epwFilePath;
     public EPWData[] ePWData;
 
@@ -41,7 +47,7 @@ public class BIPVEstimator : MonoBehaviour
 
     List<Vector3> testPoints = new();
     List<TestPointMeta> testPointData = new();
-    uint[] testResults;
+    List<uint[]> testResultList = new();
 
     private ComputeBuffer triangleBuffer, vertexBuffer, boundsBuffer, inputBuffer, outputBuffer;
 
@@ -56,16 +62,19 @@ public class BIPVEstimator : MonoBehaviour
     public float minBIPVThreshold = 0f;
     public float maxBIPVThreshold = 1000f;
 
-    public void ComputeObstructions()
+    public string geojsonFilepath;
+    public string textureFolderPath;
+
+    void SamplePoints() // Does not vary by the hour
     {
         testPoints.Clear();
         testPointData.Clear();
         int currentPointIndex = 0;
 
-        int nBuildings = meshObj.childCount;
+        int nBuildings = mapReader.childCount;
         for (int i = 0; i < nBuildings; i++)
         {
-            Transform building = meshObj.GetChild(i);
+            Transform building = mapReader.GetChild(i);
 
             List<int> facePointCounts = new();
             List<bool> isFaceVerticalList = new();
@@ -84,13 +93,13 @@ public class BIPVEstimator : MonoBehaviour
 
                 if (j == 0)
                     samplePoints = EquidistantPoints.SamplePointsBarycentric(faceMesh.vertices, faceMesh.triangles, out faceArea);
-                
+
                 else
                 {
                     samplePoints = EquidistantPoints.SampleRectanglePoints(faceMesh.vertices, out faceArea, out pointsWidth, out Vector3 outwardNormal);
                     vertFacePointWidths.Add(pointsWidth);
                     vertFaceNormalList.Add(outwardNormal);
-                } 
+                }
                 facePointCounts.Add(samplePoints.Count);
                 isFaceVerticalList.Add(j != 0);
                 faceAreaList.Add(faceArea);
@@ -109,11 +118,11 @@ public class BIPVEstimator : MonoBehaviour
             };
             testPointData.Add(buildingPointData);
         }
+    }
 
-        bvh = BVH.CreateBVH(meshObj, depth);
-
+    ColorlessTri[] GetTrisFromBVH(BVH bVH)
+    {
         ColorlessTri[] triangles = new ColorlessTri[bvh.triangles.Length];
-
         for (int i = 0; i < bvh.triangles.Length; i++)
         {
             triangles[i] = new ColorlessTri()
@@ -123,7 +132,11 @@ public class BIPVEstimator : MonoBehaviour
                 v2 = (uint)bvh.triangles[i].vCIndex,
             };
         }
+        return triangles;
+    }
 
+    BoundingBox[] GetBoundsFromBVH(BVH bVH)
+    {
         BoundingBox[] boundingBoxes = new BoundingBox[bvh.nodes.Length];
         for (int i = 1; i < bvh.nodes.Length; i++)
         {
@@ -136,10 +149,19 @@ public class BIPVEstimator : MonoBehaviour
                 triCount = (uint)bVHNode.triCount
             };
         }
+        return boundingBoxes;
+    }
+
+    public void ComputeObstructions()
+    {
+        SamplePoints();
+
+        bvh = BVH.CreateBVH(mapReader, depth);
+        ColorlessTri[] triangles = GetTrisFromBVH(bvh);
+        BoundingBox[] boundingBoxes = GetBoundsFromBVH(bvh);
 
         computeShader.SetInt("_NumPoints", testPoints.Count);
         computeShader.SetInt("_NumBounds", bvh.nodes.Length);
-        computeShader.SetVector("SunUnitDirection", new Vector4(directionalLight.transform.forward.x, directionalLight.transform.forward.y, directionalLight.transform.forward.z));
 
         triangleBuffer = new ComputeBuffer(triangles.Length, sizeof(uint) * 3);
         triangleBuffer.SetData(triangles);
@@ -157,14 +179,25 @@ public class BIPVEstimator : MonoBehaviour
         inputBuffer.SetData(testPoints);
         computeShader.SetBuffer(0, "InputPoints", inputBuffer);
 
-        testResults = new uint[testPoints.Count];
+        uint[] testResults = new uint[testPoints.Count];
         outputBuffer = new ComputeBuffer(testResults.Length, sizeof(uint) * 1);
         outputBuffer.SetData(testResults);
         computeShader.SetBuffer(0, "IsBlocked", outputBuffer);
 
-        computeShader.Dispatch(0, Mathf.CeilToInt(testPoints.Count / 256.0f), 1, 1);
-        outputBuffer.GetData(testResults);
-
+        sunDirections = new Vector3[numHours];
+        for (int hour = 0; hour < numHours; hour++)
+        {
+            SetSunPosition(dayOfYear * 24 + startHour + hour);
+            sunDirections[hour] = directionalLight.transform.forward;
+            computeShader.SetVector("SunUnitDirection", new Vector4(directionalLight.transform.forward.x, directionalLight.transform.forward.y, directionalLight.transform.forward.z));
+            computeShader.Dispatch(0, Mathf.CeilToInt(testPoints.Count / 256.0f), 1, 1);
+            outputBuffer.GetData(testResults);
+            uint[] testResultCopy = new uint[testPoints.Count];
+            
+            Array.Copy(testResults, 0, testResultCopy, 0, testResults.Length);
+            testResultList.Add(testResultCopy);
+        }
+        
         triangleBuffer.Release();
         vertexBuffer.Release();
         boundsBuffer.Release();
@@ -176,14 +209,20 @@ public class BIPVEstimator : MonoBehaviour
 
     public void CalculatePerFaceBIPV()
     {
-        if (testResults == null || testPointData.Count == 0 || testPoints.Count == 0 || ePWData == null)
+        if (testResultList.Count < 12 || testPointData.Count == 0 || testPoints.Count == 0 || ePWData == null)
         {
             Debug.Log("Data not found");
             return;
         }
 
+        List<string> features = new List<string>();
+
         for (int buildingId = 0; buildingId < testPointData.Count; buildingId++)
         {
+            Mesh topFaceMesh = mapReader.GetChild(buildingId).GetChild(0).GetComponent<MeshFilter>().sharedMesh;
+            float buildingHeight = topFaceMesh.vertices[0].y;
+
+
             TestPointMeta buildingPointData = testPointData[buildingId];
             int startIndex = (buildingId == 0) ? 0 : testPointData[buildingId - 1].buildingPointLimit;
             int endIndex = buildingPointData.buildingPointLimit;
@@ -193,7 +232,7 @@ public class BIPVEstimator : MonoBehaviour
             List<int> vertFacePointWidths = buildingPointData.vertFacePointWidths;
             List<Vector3> vertFaceNormalList = buildingPointData.vertFaceNormalList;
 
-            Transform buildingChild = meshObj.GetChild(buildingId);
+            Transform buildingChild = mapReader.GetChild(buildingId);
 
             int currentStartIndex = startIndex;
 
@@ -201,32 +240,46 @@ public class BIPVEstimator : MonoBehaviour
             {
                 int numPointsInFace = facePointCounts[faceIndex];
                 float faceArea = faceAreas[faceIndex];
-                uint numObstructions = 0;
-                for (int pointIndex = currentStartIndex; pointIndex < currentStartIndex + numPointsInFace; pointIndex++)
-                {
-                    numObstructions += testResults[pointIndex];
-                }
-
-                float shadowFraction = (float) numObstructions / numPointsInFace;
-
-                EPWData hourlyData = ePWData[hourOfYear];
                 int tiltFactor = isFaceVerticalList[faceIndex] ? 0 : 1;
-
                 Vector3 outwardNormal = (faceIndex == 0) ? Vector3.up : vertFaceNormalList[faceIndex - 1];
-                float cosTheta = Mathf.Max(0f, Vector3.Dot(outwardNormal, -directionalLight.transform.forward));
 
-                float eDirect = hourlyData.dirNI * (1.0f - shadowFraction) * cosTheta;
-                float eDiffuse = hourlyData.difHI * (1 + tiltFactor) / 2.0f;
-                float eReflected = hourlyData.globHI * 0.2f * (1 - tiltFactor) / 2.0f;
-                float faceIrradiance = eDirect + eDiffuse + eReflected;
+                float averageFaceIrradiance = 0, avgDirect = 0, avgDiffuse = 0;
+                for (int hour = 0; hour < numHours; hour++)
+                {
+                    uint numObstructions = 0;
+                    for (int pointIndex = currentStartIndex; pointIndex < currentStartIndex + numPointsInFace; pointIndex++)
+                    {
+                        numObstructions += testResultList[hour][pointIndex];
+                    }
+                    float shadowFraction = (float)numObstructions / numPointsInFace;
+                    float cosTheta = Mathf.Max(0f, Vector3.Dot(outwardNormal, -sunDirections[hour]));
+
+                    EPWData hourlyData = ePWData[dayOfYear * 24 + startHour + hour];
+                    float eDirect = hourlyData.dirNI * (1.0f - shadowFraction) * cosTheta;
+                    float eDiffuse = hourlyData.difHI * (1 + tiltFactor) / 2.0f;
+                    float eReflected = hourlyData.globHI * 0.2f * (1 - tiltFactor) / 2.0f;
+                    float faceIrradiance = eDirect + eDiffuse + eReflected;
+                    averageFaceIrradiance += faceIrradiance;
+                    avgDiffuse += eDiffuse;
+                    avgDirect += eDirect;
+                }
+                averageFaceIrradiance /= numHours;
+                avgDiffuse /= numHours;
+                avgDirect /= numHours;
+
+                Color faceColor = Color.Lerp(blockColor, freeColor, Mathf.Max((averageFaceIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
 
                 if (faceIndex == 0)
                 {
-                    Color faceColor = Color.Lerp(blockColor, freeColor, Mathf.Max((faceIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
                     buildingChild.GetChild(faceIndex).GetComponent<MeshRenderer>().sharedMaterial.SetColor("_Color", faceColor);
+                    features.Add(MapWriter.CreatePolygonFeature(topFaceMesh.vertices, faceColor, averageFaceIrradiance, avgDirect, avgDiffuse));
                 }
                 else
                 {
+                    Vector3 firstPoint = topFaceMesh.vertices[faceIndex - 1];
+                    Vector3 secondPoint = topFaceMesh.vertices[faceIndex % topFaceMesh.vertices.Length];
+                    features.Add(MapWriter.CreateLineStringFeature(firstPoint.x + MapWriter.centreX, firstPoint.z + MapWriter.centreY, secondPoint.x + MapWriter.centreX, secondPoint.z + MapWriter.centreY, buildingHeight, dayOfYear + "_" + (currentStartIndex + faceIndex).ToString() + ".png", averageFaceIrradiance, avgDirect, avgDiffuse));
+
                     int width = vertFacePointWidths[faceIndex - 1];
                     if (width == 0) break;
                     
@@ -239,28 +292,56 @@ public class BIPVEstimator : MonoBehaviour
                     {
                         for (int j = 0; j < height; j++)
                         {
-                            float pointIrradiance = (1 - testResults[pIndex]) * hourlyData.dirNI * cosTheta + eDiffuse + eReflected;
-                            Color pixelColor = Color.Lerp(blockColor, freeColor, Mathf.Max((pointIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
+                            float averagePointIrradiance = 0;
+                            for (int hour = 0; hour < 12; hour++)
+                            {
+                                EPWData hourlyData = ePWData[dayOfYear * 24 + startHour + hour];
+                                float cosTheta = Mathf.Max(0f, Vector3.Dot(outwardNormal, -sunDirections[hour]));
+                                float eDiffuse = hourlyData.difHI * (1 + tiltFactor) / 2.0f;
+                                float eReflected = hourlyData.globHI * 0.2f * (1 - tiltFactor) / 2.0f;
+
+                                float pointIrradiance = (1 - testResultList[hour][pIndex]) * hourlyData.dirNI * cosTheta + eDiffuse + eReflected;
+                                averagePointIrradiance += pointIrradiance;
+                            }
+                            averagePointIrradiance /= numHours;
+                            
+                            
+                            Color pixelColor = Color.Lerp(blockColor, freeColor, Mathf.Max((averagePointIrradiance - minBIPVThreshold), 0f) / (maxBIPVThreshold - minBIPVThreshold));
                             faceTexture.SetPixel(i, j, pixelColor);
                             pIndex++;
                         }
                     }
                     faceTexture.Apply();
+                    string texPath = Path.Combine("C:\\Users\\adith\\Downloads", textureFolderPath, dayOfYear + "_" + (currentStartIndex + faceIndex).ToString() + ".png");
+                    SaveTextureAsPNG(faceTexture, texPath);
 
                     buildingChild.GetChild(faceIndex).GetComponent<MeshRenderer>().sharedMaterial.SetTexture("_MainTex", faceTexture);
                 }
-
                 currentStartIndex += numPointsInFace;
             }
         }
 
+        string geoJson = MapWriter.ConstructGeoJson(features);
+
+        // Optionally, write the output to a file
+        string geoJsonPath = Path.Combine(Application.dataPath, "Resources", geojsonFilepath + ".geojson");
+        File.WriteAllText(geoJsonPath, geoJson);
+        Debug.Log($"GeoJSON written to {geoJsonPath}");
+
         Debug.Log("Calculated BIPV potentials");
+    }
+
+    public static void SaveTextureAsPNG(Texture2D _texture, string _fullPath)
+    {
+        byte[] _bytes = _texture.EncodeToPNG();
+        File.WriteAllBytes(_fullPath, _bytes);
+        Debug.Log(_bytes.Length / 1024 + "Kb was saved as: " + _fullPath);
     }
 
     private void OnDrawGizmos()
     {
         if (bvh == null) return;
-        // Debug.Log("Hello");
+
         bvh.DrawBVH(boxColor);
 
         //for (int i = 0; i < testPoints.Count; i++)
@@ -272,7 +353,7 @@ public class BIPVEstimator : MonoBehaviour
         //bvh.DebugView(boxColor, Color.yellow, Color.white, ray, maxRayLength);
     }
 
-    public void SetSunPosition()
+    public void SetSunPosition(int hourOfYear)
     {
         float dec = -23.45f * Mathf.Cos(360.0f / 365.0f * (hourOfYear / 24 + 11) * Mathf.Deg2Rad) * Mathf.Deg2Rad;
         float hAngle = 15f * (hourOfYear % 24 - 12) * Mathf.Deg2Rad;

@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
-
+using UnityEditor;
 
 [CustomEditor(typeof(MapWriter))]
+
 public class MapWriterEditor : Editor
 {
     public override void OnInspectorGUI()
@@ -16,5 +16,7 @@ public class MapWriterEditor : Editor
         {
             writer.WriteFromMapObject();
         }
+
     }
 }
+

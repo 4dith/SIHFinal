@@ -13,7 +13,7 @@ OcclusionCullingSettings:
 --- !u!104 &2
 RenderSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 10
+  serializedVersion: 9
   m_Fog: 0
   m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_FogMode: 3
@@ -42,8 +42,8 @@ RenderSettings:
 --- !u!157 &3
 LightmapSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 13
-  m_BakeOnSceneLoad: 0
+  serializedVersion: 12
+  m_GIWorkflowMode: 1
   m_GISettings:
     serializedVersion: 2
     m_BounceScale: 1
@@ -66,6 +66,9 @@ LightmapSettings:
     m_LightmapParameters: {fileID: 0}
     m_LightmapsBakeMode: 1
     m_TextureCompression: 1
+    m_FinalGather: 0
+    m_FinalGatherFiltering: 1
+    m_FinalGatherRayCount: 256
     m_ReflectionCompression: 2
     m_MixedBakeMode: 2
     m_BakeBackend: 1
@@ -119,52 +122,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &131815051
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 131815052}
-  - component: {fileID: 131815053}
-  m_Layer: 0
-  m_Name: MapWriter
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &131815052
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 131815051}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &131815053
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 131815051}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 45c8a1ea1a9df6445a84335ad76c81c5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  mapReader: {fileID: 425829553}
-  fileName: outputfile
 --- !u!1 &425829551
 GameObject:
   m_ObjectHideFlags: 0
@@ -194,7 +151,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f99506901142ad4eb4e782098e87032, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  shpPath: Assets/Resources/FixedShapefile/Ahmedabad.shp
+  shpPath: Assets/Resources/SmallerAhmedabad/Smaller_Ahmedbad.shp
   topFaceMat: {fileID: 2100000, guid: 5cdb72d8667b9c6478a9d0e56cac4388, type: 2}
   vertFaceMat: {fileID: 2100000, guid: 4e97ce0dbc6e6c941a5f3dbdba4202db, type: 2}
 --- !u!4 &425829553
@@ -269,8 +226,9 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 705507993}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 10
   m_Type: 1
+  m_Shape: 0
   m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
   m_Intensity: 1
   m_Range: 10
@@ -320,12 +278,8 @@ Light:
   m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
-  m_ForceVisible: 0
   m_ShadowRadius: 0
   m_ShadowAngle: 0
-  m_LightUnit: 1
-  m_LuxAtDistance: 1
-  m_EnableSpotReflector: 1
 --- !u!4 &705507995
 Transform:
   m_ObjectHideFlags: 0
@@ -334,7 +288,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 705507993}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.14880545, y: 0.81647277, z: -0.24161792, w: 0.50284183}
+  m_LocalRotation: {x: -0.000000022471127, y: 0.85774255, z: -0.51407945, w: -0.000000037493116}
   m_LocalPosition: {x: 0, y: 629, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -353,19 +307,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c66c5a793ba5eef4997f5970666368f6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  meshObj: {fileID: 425829553}
-  hourOfYear: 1000
+  mapReader: {fileID: 425829553}
+  dayOfYear: 250
   directionalLight: {fileID: 705507994}
   epwFilePath: Assets/Resources/IND_Ahmedabad.426470_IWEC/IND_Ahmedabad.426470_IWEC.epw
   depth: 16
   computeShader: {fileID: 7200000, guid: 85a0ce6c905e36144a8556b5333d037f, type: 3}
   boxColor: {r: 0.5320754, g: 0.5320754, b: 0.5320754, a: 0.38039216}
-  blockColor: {r: 0, g: 0.06851816, b: 1, a: 1}
-  freeColor: {r: 1, g: 0.00914917, b: 0, a: 1}
+  blockColor: {r: 0, g: 0, b: 1, a: 1}
+  freeColor: {r: 1, g: 0, b: 0, a: 1}
   ray: {fileID: 620145400}
   maxRayLength: 1
   minBIPVThreshold: 0
-  maxBIPVThreshold: 700
+  maxBIPVThreshold: 800
+  geojsonFilepath: 21122024
+  textureFolderPath: 21122024
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0
@@ -471,6 +427,52 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 333bf09f5a373ec489e0f724883e0408, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!1 &1404541344
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1404541346}
+  - component: {fileID: 1404541345}
+  m_Layer: 0
+  m_Name: MapWriter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1404541345
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1404541344}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f89236b35abbb0045acc5d030e83a4ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mapReader: {fileID: 425829553}
+  fileName: phaku_6
+--- !u!4 &1404541346
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1404541344}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -479,4 +481,4 @@ SceneRoots:
   - {fileID: 705507995}
   - {fileID: 620145400}
   - {fileID: 425829553}
-  - {fileID: 131815052}
+  - {fileID: 1404541346}
