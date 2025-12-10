@@ -1,12 +1,8 @@
 # City-Scale Wall Irradiance Estimation (LOD-1, Ray-Tracing Based)
 
----
-
 This project computes the **total solar irradiance** (direct + diffuse + reflected) received by **each wall of every building** in a user-supplied city map. Using a shapefile as input, it constructs an **LOD-1 3D model** of all buildings, performs GPU-accelerated ray tracing to evaluate shading, and outputs **per-wall irradiance maps and heatmaps** for further visualization and solar potential analysis.
 
 The pipeline is designed for **city-scale performance**, leveraging a **Bounding Volume Hierarchy (BVH)** and a **compute shader** for massively parallel shadow testing.
-
----
 
 ### **Visualization Preview**
 
@@ -25,8 +21,6 @@ This visualization is **not part of the repository**; it is simply a demonstrati
 - Performs **GPU-parallel ray tracing** via compute shaders
 - Computes direct, diffuse, and reflected irradiance per building wall
 - Generates **irradiance heatmaps** and **GeoJSON output** for visualization
-
----
 
 # **1. Input**
 
@@ -48,9 +42,6 @@ The EnergyPlus Weather (EPW) file provides:
     
     These values are used per hour of the year.
     
-
----
-
 # **2. Pipeline Overview**
 
 ### **Step 1 — Load Shapefile**
@@ -142,15 +133,11 @@ For each building face:
 
 This enables use in GIS tools, dashboards, or BIPV potential workflows.
 
----
-
 # **3. Output**
 
 - **Wall-wise irradiance values (W/m² or Wh/m²)**
 - **Heatmap textures** for each wall
 - **GeoJSON** with irradiance attributes
-
----
 
 # **4. Limitations**
 
@@ -158,8 +145,6 @@ This enables use in GIS tools, dashboards, or BIPV potential workflows.
 - **Trees and vegetation are not modeled**
 - Uses an **isotropic diffuse model** and fixed ground albedo
 - Shadowing considers only building geometry
-
----
 
 # **5. Technologies Used**
 
@@ -170,8 +155,6 @@ This enables use in GIS tools, dashboards, or BIPV potential workflows.
 - EPW weather file parser
 - GIS libraries (QGIS) for shapefile processing
 
----
-
 # **6. Future Work**
 
 - Add tree geometry and vegetation occlusion
@@ -179,5 +162,3 @@ This enables use in GIS tools, dashboards, or BIPV potential workflows.
 - Support anisotropic sky models (Perez, Hay-Davies)
 - Incorporate multiple reflections or radiosity
 - Improve sampling adaptively based on geometry
-
----
